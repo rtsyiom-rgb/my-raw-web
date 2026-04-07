@@ -10,37 +10,29 @@ if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, JSON.stringify({}));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// --- หน้าแรกสำหรับอัปโหลด ---
+// --- หน้าแรก (สำหรับเจ้าของมาสร้างสคริปต์) ---
 app.get('/', (req, res) => {
     res.send(`
         <!DOCTYPE html>
-        <html lang="th">
+        <html>
         <head>
             <meta charset="UTF-8">
-            <title>Script Hub | rtsyiom-rgb</title>
+            <title>Script Creator | rtsyiom-rgb</title>
             <style>
-                body { background: #0f111a; color: #fff; font-family: 'Segoe UI', sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-                .container { background: #1a1c2e; padding: 40px; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.5); width: 100%; max-width: 500px; border: 1px solid #2d304d; }
-                h1 { color: #5765f2; text-align: center; margin-bottom: 30px; font-size: 28px; }
-                label { display: block; margin-bottom: 8px; color: #8e9297; font-size: 13px; font-weight: bold; }
-                input, textarea { width: 100%; background: #0f111a; color: #dcddde; border: 1px solid #000; border-radius: 8px; padding: 12px; box-sizing: border-box; outline: none; margin-bottom: 20px; transition: 0.3s; }
-                textarea { height: 150px; border-left: 4px solid #5765f2; resize: none; }
-                input:focus, textarea:focus { border-color: #5765f2; }
-                button { background: #5765f2; color: #fff; border: none; padding: 15px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; font-size: 16px; transition: 0.2s; }
-                button:hover { background: #4752c4; transform: translateY(-2px); }
+                body { background: #0f111a; color: #fff; font-family: 'Segoe UI', sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+                .box { background: #1a1c2e; padding: 30px; border-radius: 15px; width: 400px; border: 1px solid #2d304d; }
+                input, textarea { width: 100%; background: #0f111a; color: #fff; border: 1px solid #333; padding: 10px; margin: 10px 0; border-radius: 5px; box-sizing: border-box; }
+                button { width: 100%; padding: 12px; background: #5765f2; border: none; color: #fff; font-weight: bold; cursor: pointer; border-radius: 5px; }
             </style>
         </head>
         <body>
-            <div class="container">
-                <h1>SRCRIPT HUB</h1>
+            <div class="box">
+                <h2 style="text-align:center;color:#5765f2;">CREATE SCRIPT</h2>
                 <form action="/save" method="POST">
-                    <label>FILE NAME</label>
-                    <input type="text" name="title" placeholder="BloxFruits82.lua" required>
-                    <label>LUA CONTENT</label>
-                    <textarea name="content" placeholder="Paste your script here..." required></textarea>
-                    <label>PASSWORD (OPTIONAL)</label>
-                    <input type="text" name="password" placeholder="Access key...">
-                    <button type="submit">GENERATE LOADSTRING</button>
+                    <input type="text" name="title" placeholder="ชื่อไฟล์ (เช่น BloxFruits82.lua)" required>
+                    <textarea name="content" placeholder="วางสคริปต์ที่นี่..." rows="8" required></textarea>
+                    <input type="text" name="password" placeholder="Key/Password (ถ้ามี)">
+                    <button type="submit">GENERATE</button>
                 </form>
             </div>
         </body>
@@ -48,52 +40,64 @@ app.get('/', (req, res) => {
     `);
 });
 
-// --- ระบบบันทึกและสร้างหน้า Loadstring UI ---
+// --- ระบบบันทึกและ Redirect ไปหน้า View ---
 app.post('/save', (req, res) => {
     const { title, content, password } = req.body;
     const id = Math.random().toString(36).substring(2, 10);
     const db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
     db[id] = { title: title || "script.lua", content, password: password || "" };
     fs.writeFileSync(DATA_FILE, JSON.stringify(db));
+    res.redirect('/view/' + id); 
+});
 
-    const rawUrl = `${req.protocol}://${req.get('host')}/raw/${id}${password ? '?key=' + password : ''}`;
+// --- หน้าแสดงผลแบบสวยงาม (เหมือนในรูปที่ 7) ---
+app.get('/view/:id', (req, res) => {
+    const db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    const entry = db[req.params.id];
+    if (!entry) return res.send("Script Not Found");
+
+    const rawUrl = `${req.protocol}://${req.get('host')}/raw/${req.params.id}${entry.password ? '?key=' + entry.password : ''}`;
     const loadstring = `loadstring(game:HttpGet("${rawUrl}"))()`;
 
-    // หน้าตาหลังจากกด Save ให้เหมือนในรูปที่ส่งมา
     res.send(`
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
-            <title>Loadstring | ${title}</title>
+            <title>Loadstring | ${entry.title}</title>
             <style>
                 body { background: #0f111a; color: #fff; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-                .title-top { font-size: 20px; font-weight: bold; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
-                .code-box { background: #151726; border: 1px solid #2d304d; border-radius: 12px; width: 90%; max-width: 800px; padding: 20px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-                .code-text { font-family: 'Consolas', monospace; font-size: 14px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; margin: 0; padding-right: 60px; }
-                .blue { color: #58a6ff; } .orange { color: #ffa657; } .green { color: #7ee787; }
-                .copy-btn { position: absolute; top: 15px; right: 15px; background: #2d304d; color: #dcddde; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; transition: 0.2s; }
-                .copy-btn:hover { background: #40446b; color: #fff; }
-                .footer { margin-top: 20px; color: #8e9297; font-size: 12px; }
+                .title-header { font-size: 22px; font-weight: bold; margin-bottom: 25px; display: flex; align-items: center; gap: 10px; }
+                .code-container { background: #151726; border: 1px solid #2d304d; border-radius: 12px; width: 90%; max-width: 850px; padding: 25px; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
+                .code-box { font-family: 'Consolas', monospace; font-size: 15px; color: #dcdccc; line-height: 1.6; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+                .keyword { color: #569cd6; } .string { color: #ce9178; } .variable { color: #9cdcfe; } .comment { color: #6a9955; }
+                .copy-btn { position: absolute; top: 15px; right: 15px; background: #323552; color: #fff; border: none; padding: 7px 15px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold; }
+                .copy-btn:hover { background: #474b75; }
+                .footer { margin-top: 25px; color: #5c607a; font-size: 13px; }
             </style>
         </head>
         <body>
-            <div class="title-top">📜 Loadstring</div>
-            <div class="code-box">
-                <button class="copy-btn" onclick="copyCode()">Copy</button>
-                <p class="code-text" id="code">
-<span class="orange">script_key</span> = <span class="green">"KEY"</span>; <span style="color: #6a9955;">-- A key might be required</span>
-<span class="blue">loadstring</span>(<span class="blue">game</span>:<span class="blue">HttpGet</span>(<span class="green">"${rawUrl}"</span>))()</p>
+            <div class="title-header">📜 Loadstring</div>
+            <div class="code-container">
+                <button class="copy-btn" id="copyBtn" onclick="copyCode()">Copy</button>
+                <div class="code-box">
+<span class="keyword">script_key</span> = <span class="string">"${entry.password || 'FREE'}"</span>; <span class="comment">-- A key might be required, if not, delete this line.</span>
+<span class="keyword">loadstring</span>(<span class="variable">game</span>:<span class="variable">HttpGet</span>(<span class="string">"${rawUrl}"</span>))()
+                </div>
             </div>
-            <div class="footer">Contents can not be displayed on browser • rtsyiom-rgb</div>
+            <div class="footer">Contents can not be displayed on browser • https://rtsyiom-rgb.onrender.com/</div>
 
             <script>
                 function copyCode() {
                     const text = \`loadstring(game:HttpGet("${rawUrl}"))()\`;
                     navigator.clipboard.writeText(text);
-                    const btn = document.querySelector('.copy-btn');
+                    const btn = document.getElementById('copyBtn');
                     btn.innerText = 'Copied!';
-                    setTimeout(() => btn.innerText = 'Copy', 2000);
+                    btn.style.background = '#28a745';
+                    setTimeout(() => {
+                        btn.innerText = 'Copy';
+                        btn.style.background = '#323552';
+                    }, 2000);
                 }
             </script>
         </body>
@@ -101,15 +105,21 @@ app.post('/save', (req, res) => {
     `);
 });
 
-// --- หน้า RAW สำหรับตัวรันสคริปต์ (ห้ามแก้ส่วนนี้) ---
+// --- หน้า RAW ล้วน (สำหรับ Executor ดึงไปใช้) ---
 app.get('/raw/:id', (req, res) => {
     const db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
     const entry = db[req.params.id];
     if (entry) {
-        if (entry.password !== "" && req.query.key !== entry.password) return res.status(403).send("-- Private");
+        if (entry.password !== "" && req.query.key !== entry.password) {
+            return res.status(403).send("-- [ Error: This is a private script. ]");
+        }
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.send(entry.content);
-    } else res.status(404).send('-- Not Found');
+    } else {
+        res.status(404).send('-- [ Error: Script Not Found ]');
+    }
 });
 
-app.listen(PORT, '0.0.0.0');
+app.listen(PORT, '0.0.0.0', () => {
+    console.log("Server running...");
+});
