@@ -1,5 +1,6 @@
 const express = require('express');
 const fs = require('fs');
+const path = require('path');
 const app = express();
 const DATA_FILE = './database.json';
 const PORT = process.env.PORT || 3000;
@@ -9,7 +10,16 @@ if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, JSON.stringify({}));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// --- หน้าแรก: เพิ่มช่องใส่รหัสผ่าน ---
+// --- ส่วนส่ง Favicon ---
+app.get('/favicon.ico', (req, res) => {
+    if (fs.existsSync(path.join(__dirname, 'favicon.ico'))) {
+        res.sendFile(path.join(__dirname, 'favicon.ico'));
+    } else {
+        res.status(404).end();
+    }
+});
+
+// --- หน้าแรก ---
 app.get('/', (req, res) => {
     res.send(`
         <!DOCTYPE html>
@@ -17,7 +27,8 @@ app.get('/', (req, res) => {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Raw Hub - Private</title>
+            <title>Raw Hub | rtsyiom-rgb</title>
+            <link rel="icon" type="image/x-icon" href="/favicon.ico">
             <style>
                 body { background: #0b0e14; color: #ffffff; font-family: 'Consolas', monospace; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
                 .card { background: #151921; padding: 30px; border-radius: 15px; box-shadow: 0 0 20px rgba(0,255,136,0.2); width: 90%; max-width: 700px; border: 1px solid #232936; }
@@ -36,16 +47,16 @@ app.get('/', (req, res) => {
                 <h1>SECURE RAW</h1>
                 <form action="/save" method="POST">
                     <div class="input-group">
-                        <label>TITLE</label>
-                        <input type="text" name="title" placeholder="ชื่อหัวข้อ..." required>
+                        <label>TITLE (ชื่อที่จะแสดงด้านบนสุด)</label>
+                        <input type="text" name="title" placeholder="เช่น My Super Script v1" required>
                     </div>
                     <div class="input-group">
                         <label>CONTENT</label>
                         <textarea name="content" placeholder="วางโค้ดหรือข้อความที่นี่..." required></textarea>
                     </div>
                     <div class="input-group">
-                        <label>PASSWORD (ใส่เพื่อล็อค ไม่ใส่เพื่อเปิดสาธารณะ)</label>
-                        <input type="text" name="password" placeholder="ตั้งรหัสผ่านที่นี่ (ถ้ามี)">
+                        <label>PASSWORD (ใส่เพื่อล็อค)</label>
+                        <input type="text" name="password" placeholder="ตั้งรหัสผ่าน (ถ้ามี)">
                     </div>
                     <button type="submit">GENERATE SECURE LINK</button>
                 </form>
@@ -55,7 +66,7 @@ app.get('/', (req, res) => {
     `);
 });
 
-// --- ระบบบันทึก: เก็บ Password ด้วย ---
+// --- ระบบบันทึก ---
 app.post('/save', (req, res) => {
     const { title, content, password } = req.body;
     if (!content) return res.redirect('/');
@@ -63,56 +74,47 @@ app.post('/save', (req, res) => {
     const id = Math.random().toString(36).substring(2, 10);
     const db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
     
-    db[id] = { 
-        title: title || "Untitled", 
-        content: content, 
-        password: password || "" 
-    };
-    
+    db[id] = { title: title || "Untitled", content: content, password: password || "" };
     fs.writeFileSync(DATA_FILE, JSON.stringify(db));
 
     const baseUrl = `${req.protocol}://${req.get('host')}/raw/${id}`;
-    // ถ้ามีรหัสผ่าน ให้สร้างลิงก์ที่มีพารามิเตอร์รหัสผ่านพ่วงไปให้ด้วย
     const shareUrl = password ? `${baseUrl}?key=${password}` : baseUrl;
 
     res.send(`
         <body style="background:#0b0e14; color:white; font-family:sans-serif; text-align:center; padding-top:100px;">
-            <h2 style="color:#00ff88;">สร้าง Raw สำเร็จ!</h2>
-            <div style="background:#151921; display:inline-block; padding:20px; border-radius:10px; border:1px solid #333;">
-                <p>ลิงก์สำหรับเข้าดู (Share Link):</p>
-                <input type="text" value="${shareUrl}" style="width:350px; padding:10px; background:#000; color:#00ff88; border:1px solid #333; text-align:center;" readonly>
-                ${password ? `<p style="color:#ffae00; font-size:12px;">* ลิงก์นี้มีรหัสผ่านฝังไว้แล้ว ใครได้ลิงก์นี้จะเห็นโค้ดทันที</p>` : ''}
-                <br>
-                <a href="${shareUrl}" style="color:#00ff88; text-decoration:none;">[ ไปหน้า RAW ]</a> | 
-                <a href="/" style="color:#aaa; text-decoration:none;">[ กลับหน้าหลัก ]</a>
-            </div>
+            <h2 style="color:#00ff88;">บันทึกเรียบร้อย!</h2>
+            <p>ชื่อรายการ: <b>${title}</b></p>
+            <input type="text" value="${shareUrl}" style="width:350px; padding:10px; background:#000; color:#00ff88; border:1px solid #333; text-align:center;" readonly>
+            <br><br>
+            <a href="${shareUrl}" style="color:#00ff88; text-decoration:none;">[ ไปหน้า RAW ]</a> | <a href="/" style="color:#aaa; text-decoration:none;">[ กลับหน้าหลัก ]</a>
         </body>
     `);
 });
 
-// --- หน้าแสดง Raw: ตรวจสอบรหัสผ่าน ---
+// --- หน้าแสดง Raw: เพิ่มการแสดงชื่อหัวข้อ ---
 app.get('/raw/:id', (req, res) => {
     const db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
     const entry = db[req.params.id];
     
     if (entry) {
-        // ถ้ามีการตั้งรหัสผ่าน
         if (entry.password !== "") {
-            const userKey = req.query.key; // รับค่าจาก ?key=...
-            if (userKey !== entry.password) {
-                // ถ้าคนแอบส่องไม่มีคีย์ หรือคีย์ผิด จะเห็นหน้าว่าง (Status 403)
-                return res.status(403).send(""); 
-            }
+            const userKey = req.query.key;
+            if (userKey !== entry.password) return res.status(403).send(""); 
         }
         
-        // ถ้าผ่านเงื่อนไข ให้ส่งแค่ Content ล้วนๆ
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.send(entry.content);
+        
+        // --- ส่วนที่แก้ไข: แสดงชื่อที่บรรทัดบนสุด ---
+        const output = `FILE: ${entry.title}\n` + 
+                       `--------------------------------\n\n` + 
+                       `${entry.content}`;
+        
+        res.send(output);
     } else {
         res.status(404).send('Not Found');
     }
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Private Server Online on Port: ${PORT}`);
+    console.log(`🚀 Online at Port: ${PORT}`);
 });
